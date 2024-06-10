@@ -6,6 +6,7 @@
 import math
 from typing import Dict, List, Optional
 
+import json
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -19,7 +20,6 @@ from fairseq.modules import (
     LayerDropModuleList,
     LayerNorm,
     PositionalEmbedding,
-    SinusoidalPositionalEmbedding,
     transformer_layer,
 )
 from fairseq.modules.checkpoint_activations import checkpoint_wrapper
@@ -74,10 +74,10 @@ class TransformerEncoderBase(FairseqEncoder):
             if not cfg.no_token_positional_embeddings
             else None
         )
-        if cfg.layernorm_embedding:
-            self.layernorm_embedding = LayerNorm(embed_dim, export=cfg.export)
-        else:
-            self.layernorm_embedding = None
+
+        self.layernorm_embedding = (
+            LayerNorm(embed_dim, export=cfg.export) if cfg.layernorm_embedding else None
+        )
 
         if not cfg.adaptive_input and cfg.quant_noise.pq > 0:
             self.quant_noise = apply_quant_noise_(
@@ -88,19 +88,40 @@ class TransformerEncoderBase(FairseqEncoder):
         else:
             self.quant_noise = None
 
-        if self.encoder_layerdrop > 0.0:
-            self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
-        else:
-            self.layers = nn.ModuleList([])
-        self.layers.extend(
-            [self.build_encoder_layer(cfg) for i in range(cfg.encoder.layers)]
+        self.recurrent_stacking = cfg.encoder.recurrent_stacking
+
+        self.layers = (
+            LayerDropModuleList(p=self.encoder_layerdrop)
+            if self.encoder_layerdrop > 0.0
+            else nn.ModuleList([])
         )
+
+        if self.recurrent_stacking is not None:
+            self.layers.extend(
+                [self.build_encoder_layer(cfg)] * self.recurrent_stacking
+            )
+        else:
+            self.layers.extend(
+                [self.build_encoder_layer(cfg) for _ in range(cfg.encoder.layers)]
+            )
+
         self.num_layers = len(self.layers)
 
-        if cfg.encoder.normalize_before:
-            self.layer_norm = LayerNorm(embed_dim, export=cfg.export)
+        self.layer_norm = (
+            LayerNorm(embed_dim, export=cfg.export)
+            if cfg.encoder.normalize_before
+            else None
+        )
+
+        if getattr(cfg, "alibi_args", False) and self.embed_positions is None:
+            alibi_args = json.loads(cfg.alibi_args)
+            self.alibi = utils.alibi(
+                cfg.encoder.attention_heads,
+                self.max_source_positions,
+                alibi_args.get("alibi_asymmetrical", False),
+            )
         else:
-            self.layer_norm = None
+            self.alibi = None
 
     def build_encoder_layer(self, cfg):
         layer = transformer_layer.TransformerEncoderLayerBase(
@@ -216,6 +237,15 @@ class TransformerEncoderBase(FairseqEncoder):
             1 - encoder_padding_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x)
         )
 
+        if self.alibi is not None:
+            shape = x.size()
+            self.alibi = self.alibi.to(x)
+            self_attn_mask = self.alibi[:, : shape[1], : shape[1]].repeat(
+                shape[0], 1, 1
+            )
+        else:
+            self_attn_mask = None
+
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
@@ -226,7 +256,7 @@ class TransformerEncoderBase(FairseqEncoder):
             encoder_states.append(x)
 
         # encoder layers
-        for layer in self.layers:
+        for idx, layer in enumerate(self.layers):
             lr = layer(
                 x, encoder_padding_mask=encoder_padding_mask if has_pads else None
             )

@@ -6,10 +6,10 @@
 import os
 import sys
 from dataclasses import _MISSING_TYPE, dataclass, field
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 
 import torch
-from omegaconf import II, MISSING
+from omegaconf import II, MISSING, OmegaConf
 
 from fairseq.dataclass.constants import (
     DATASET_IMPL_CHOICES,
@@ -249,6 +249,9 @@ class CommonConfig(FairseqDataclass):
         metadata={
             "help": "path to run plasma_store, defaults to /tmp/plasma. Paths outside /tmp tend to fail."
         },
+    )
+    run_sanity_validation_steps: bool = field(
+        default=False, metadata={"help": "whether to run one validation sanity epoch"}
     )
 
 
@@ -776,6 +779,16 @@ class CheckpointConfig(FairseqDataclass):
             "argparse_alias": "--save-async",
         },
     )
+    ### EXPERIMENTAL :: NOT TO BE USED UNTIL TESTED ###
+    load_checkpoint_liberally: bool = field(
+        default=False,
+        metadata={
+            "help": "leads the checkpoint in non-strict manner,"
+            "i.e., any architecture differences can be accomodated - "
+            "mainly helpful while training with adapters"
+        },
+    )
+    ### EXPERIMENTAL :: NOT TO BE USED UNTIL TESTED ###
     model_parallel_size: int = II("common.model_parallel_size")
 
 
@@ -1095,6 +1108,12 @@ class InteractiveConfig(FairseqDataclass):
         default="-",
         metadata={"help": "file to read from; use - for stdin"},
     )
+    force_override_max_positions: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "force override the max_positions specified in the checkpoint. Should be a tuple of integers, ex. (2048, 2048), in the form of a string."
+        },
+    )
 
 
 @dataclass
@@ -1126,16 +1145,18 @@ class EMAConfig(FairseqDataclass):
 
 @dataclass
 class FairseqConfig(FairseqDataclass):
-    common: CommonConfig = CommonConfig()
-    common_eval: CommonEvalConfig = CommonEvalConfig()
-    distributed_training: DistributedTrainingConfig = DistributedTrainingConfig()
-    dataset: DatasetConfig = DatasetConfig()
-    optimization: OptimizationConfig = OptimizationConfig()
-    checkpoint: CheckpointConfig = CheckpointConfig()
-    bmuf: FairseqBMUFConfig = FairseqBMUFConfig()
-    generation: GenerationConfig = GenerationConfig()
-    eval_lm: EvalLMConfig = EvalLMConfig()
-    interactive: InteractiveConfig = InteractiveConfig()
+    common: CommonConfig = field(default=CommonConfig)
+    common_eval: CommonEvalConfig = field(default=CommonEvalConfig)
+    distributed_training: DistributedTrainingConfig = field(
+        default=DistributedTrainingConfig
+    )
+    dataset: DatasetConfig = field(default=DatasetConfig)
+    optimization: OptimizationConfig = field(default=OptimizationConfig)
+    checkpoint: CheckpointConfig = field(default=CheckpointConfig)
+    bmuf: FairseqBMUFConfig = field(default=FairseqBMUFConfig)
+    generation: GenerationConfig = field(default=GenerationConfig)
+    eval_lm: EvalLMConfig = field(default=EvalLMConfig)
+    interactive: InteractiveConfig = field(default=InteractiveConfig)
     model: Any = MISSING
     task: Any = None
     criterion: Any = None
@@ -1144,4 +1165,4 @@ class FairseqConfig(FairseqDataclass):
     scoring: Any = None
     bpe: Any = None
     tokenizer: Any = None
-    ema: EMAConfig = EMAConfig()
+    ema: EMAConfig = field(default=EMAConfig)

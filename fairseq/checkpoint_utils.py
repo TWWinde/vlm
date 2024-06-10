@@ -35,6 +35,10 @@ logger = logging.getLogger(__name__)
 def save_checkpoint(cfg: CheckpointConfig, trainer, epoch_itr, val_loss):
     from fairseq import meters
 
+    # force the mdoel to eval mode
+    # to merge all lora modules, before saving the model
+    trainer.model.eval()
+
     # only one worker should attempt to create the required dir
     if trainer.data_parallel_rank == 0:
         os.makedirs(cfg.save_dir, exist_ok=True)
@@ -100,9 +104,9 @@ def save_checkpoint(cfg: CheckpointConfig, trainer, epoch_itr, val_loss):
                 cfg.best_checkpoint_metric, val_loss, rand_sfx, suffix
             )
         ] = worst_best is None or is_better(val_loss, worst_best)
-    checkpoint_conds[
-        "checkpoint_last{}.pt".format(suffix)
-    ] = not cfg.no_last_checkpoints
+    checkpoint_conds["checkpoint_last{}.pt".format(suffix)] = (
+        not cfg.no_last_checkpoints
+    )
 
     extra_state = {
         "train_iterator": epoch_itr.state_dict(),
@@ -116,7 +120,9 @@ def save_checkpoint(cfg: CheckpointConfig, trainer, epoch_itr, val_loss):
     # attributes
     if hasattr(trainer.task, "get_checkpoint_dict"):
         extra_state = {**extra_state, **trainer.task.get_checkpoint_dict()}
-        logger.info(f"State of {trainer.task.__class__.__name__} is ready to be persisted with the checkpoint")
+        logger.info(
+            f"State of {trainer.task.__class__.__name__} is ready to be persisted with the checkpoint"
+        )
 
     if hasattr(save_checkpoint, "best"):
         extra_state.update({"best": save_checkpoint.best})

@@ -103,11 +103,9 @@ class AudioFinetuningConfig(AudioPretrainingConfig):
     )
     rebuild_batches: bool = True
     target_dictionary: Optional[str] = field(
-        default=None,
-        metadata={
-            "help": "override default dictionary location"
-        }
+        default=None, metadata={"help": "override default dictionary location"}
     )
+
 
 @register_task("audio_finetuning", dataclass=AudioFinetuningConfig)
 class AudioFinetuningTask(AudioPretrainingTask):
@@ -130,7 +128,7 @@ class AudioFinetuningTask(AudioPretrainingTask):
             if self.cfg.target_dictionary:  # override dict
                 target_dictionary = self.cfg.target_dictionary
             dict_path = os.path.join(target_dictionary, f"dict.{self.cfg.labels}.txt")
-            logger.info('Using dict_path : {}'.format(dict_path))
+            logger.info("Using dict_path : {}".format(dict_path))
             return Dictionary.load(dict_path)
         return None
 
@@ -178,17 +176,26 @@ class AudioFinetuningTask(AudioPretrainingTask):
 
             target_dataset_map = OrderedDict()
 
-            multi_corpus_keys = [k.strip() for k in task_cfg.multi_corpus_keys.split(",")]
+            multi_corpus_keys = [
+                k.strip() for k in task_cfg.multi_corpus_keys.split(",")
+            ]
             corpus_idx_map = {k: idx for idx, k in enumerate(multi_corpus_keys)}
 
             data_keys = [k.split(":") for k in split.split(",")]
 
-            multi_corpus_sampling_weights = [float(val.strip()) for val in task_cfg.multi_corpus_sampling_weights.split(",")]
+            multi_corpus_sampling_weights = [
+                float(val.strip())
+                for val in task_cfg.multi_corpus_sampling_weights.split(",")
+            ]
             data_weights = []
             for key, file_name in data_keys:
                 k = key.strip()
-                label_path = os.path.join(data_path, f"{file_name.strip()}.{task_cfg.labels}")
-                skipped_indices = getattr(self.dataset_map[split][k], "skipped_indices", set())
+                label_path = os.path.join(
+                    data_path, f"{file_name.strip()}.{task_cfg.labels}"
+                )
+                skipped_indices = getattr(
+                    self.dataset_map[split][k], "skipped_indices", set()
+                )
                 text_compressor = TextCompressor(level=text_compression_level)
                 with open(label_path, "r") as f:
                     labels = [
@@ -222,7 +229,12 @@ class AudioFinetuningTask(AudioPretrainingTask):
             if len(target_dataset_map) == 1:
                 self.datasets[split] = list(target_dataset_map.values())[0]
             else:
-                self.datasets[split] = MultiCorpusDataset(target_dataset_map, distribution=data_weights, seed=0, sort_indices=True)
+                self.datasets[split] = MultiCorpusDataset(
+                    target_dataset_map,
+                    distribution=data_weights,
+                    seed=0,
+                    sort_indices=True,
+                )
 
     @property
     def target_dictionary(self):
@@ -368,20 +380,24 @@ class AudioFinetuningTask(AudioPretrainingTask):
             if num_chars > 0:
                 metrics.log_derived(
                     "uer",
-                    lambda meters: meters["_num_char_errors"].sum
-                    * 100.0
-                    / meters["_num_chars"].sum
-                    if meters["_num_chars"].sum > 0
-                    else float("nan"),
+                    lambda meters: (
+                        meters["_num_char_errors"].sum
+                        * 100.0
+                        / meters["_num_chars"].sum
+                        if meters["_num_chars"].sum > 0
+                        else float("nan")
+                    ),
                 )
             if num_words > 0:
                 metrics.log_derived(
                     "wer",
-                    lambda meters: meters["_num_word_errors"].sum
-                    * 100.0
-                    / meters["_num_words"].sum
-                    if meters["_num_words"].sum > 0
-                    else float("nan"),
+                    lambda meters: (
+                        meters["_num_word_errors"].sum
+                        * 100.0
+                        / meters["_num_words"].sum
+                        if meters["_num_words"].sum > 0
+                        else float("nan")
+                    ),
                 )
         if self.cfg.eval_bleu:
             len_keys = ["_bleu_sys_len", "_bleu_ref_len"]

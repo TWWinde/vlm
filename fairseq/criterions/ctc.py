@@ -70,9 +70,7 @@ class CtcCriterionConfig(FairseqDataclass):
 
 @register_criterion("ctc", dataclass=CtcCriterionConfig)
 class CtcCriterion(FairseqCriterion):
-    def __init__(
-        self, cfg: CtcCriterionConfig, task: FairseqTask, rdrop_alpha: int = 0.0
-    ):
+    def __init__(self, cfg: CtcCriterionConfig, task: FairseqTask):
         super().__init__(task)
         self.blank_idx = (
             task.target_dictionary.index(task.blank_symbol)
@@ -82,8 +80,6 @@ class CtcCriterion(FairseqCriterion):
         self.pad_idx = task.target_dictionary.pad()
         self.eos_idx = task.target_dictionary.eos()
         self.post_process = cfg.post_process
-
-        self.rdrop_alpha = rdrop_alpha
 
         if cfg.wer_args is not None:
             (
@@ -117,30 +113,11 @@ class CtcCriterion(FairseqCriterion):
         self.zero_infinity = cfg.zero_infinity
         self.sentence_avg = cfg.sentence_avg
 
-    def forward(self, model, sample, reduce=True, **kwargs):
+    def forward(self, model, sample, reduce=True):
         net_output = model(**sample["net_input"])
         lprobs = model.get_normalized_probs(
             net_output, log_probs=True
         ).contiguous()  # (T, B, C) from the encoder
-
-        # CTC loss is calculated over duplicated inputs
-        # sample is already duplicated for R-Drop
-        if self.rdrop_alpha > 0:
-            for k, v in sample.items():
-                if k in ["target", "target_lengths"]:
-                    sample[k] = torch.cat([v, v.clone()], dim=0)
-                elif k == "net_input":
-                    if sample[k]["src_tokens"].size(1) != sample[k]["src_lengths"].size(
-                        0
-                    ):
-                        # for decoder CTC loss
-                        sample[k]["src_lengths"] = torch.cat(
-                            [
-                                sample[k]["src_lengths"],
-                                sample[k]["src_lengths"].clone(),
-                            ],
-                            dim=0,
-                        )
 
         if "src_lengths" in sample["net_input"]:
             input_lengths = sample["net_input"]["src_lengths"]
@@ -198,9 +175,11 @@ class CtcCriterion(FairseqCriterion):
                 wv_errs = 0
                 for lp, t, inp_l in zip(
                     lprobs_t,
-                    sample["target_label"]
-                    if "target_label" in sample
-                    else sample["target"],
+                    (
+                        sample["target_label"]
+                        if "target_label" in sample
+                        else sample["target"]
+                    ),
                     input_lengths,
                 ):
                     lp = lp[:inp_l].unsqueeze(0)
@@ -291,28 +270,34 @@ class CtcCriterion(FairseqCriterion):
         if c_total > 0:
             metrics.log_derived(
                 "uer",
-                lambda meters: safe_round(
-                    meters["_c_errors"].sum * 100.0 / meters["_c_total"].sum, 3
-                )
-                if meters["_c_total"].sum > 0
-                else float("nan"),
+                lambda meters: (
+                    safe_round(
+                        meters["_c_errors"].sum * 100.0 / meters["_c_total"].sum, 3
+                    )
+                    if meters["_c_total"].sum > 0
+                    else float("nan")
+                ),
             )
         if w_total > 0:
             metrics.log_derived(
                 "wer",
-                lambda meters: safe_round(
-                    meters["_w_errors"].sum * 100.0 / meters["_w_total"].sum, 3
-                )
-                if meters["_w_total"].sum > 0
-                else float("nan"),
+                lambda meters: (
+                    safe_round(
+                        meters["_w_errors"].sum * 100.0 / meters["_w_total"].sum, 3
+                    )
+                    if meters["_w_total"].sum > 0
+                    else float("nan")
+                ),
             )
             metrics.log_derived(
                 "raw_wer",
-                lambda meters: safe_round(
-                    meters["_wv_errors"].sum * 100.0 / meters["_w_total"].sum, 3
-                )
-                if meters["_w_total"].sum > 0
-                else float("nan"),
+                lambda meters: (
+                    safe_round(
+                        meters["_wv_errors"].sum * 100.0 / meters["_w_total"].sum, 3
+                    )
+                    if meters["_w_total"].sum > 0
+                    else float("nan")
+                ),
             )
 
     @staticmethod

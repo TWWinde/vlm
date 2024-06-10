@@ -133,9 +133,9 @@ class TransformerModel(TransformerModelBase):
         return super().build_model(cfg, task)
 
     @classmethod
-    def build_embedding(cls, args, dictionary, embed_dim, path=None):
+    def build_embedding(cls, args, dictionary, embed_dim, hid_dim=None, path=None):
         return super().build_embedding(
-            TransformerConfig.from_namespace(args), dictionary, embed_dim, path
+            TransformerConfig.from_namespace(args), dictionary, embed_dim, hid_dim, path
         )
 
     @classmethod
@@ -158,9 +158,17 @@ class TransformerModel(TransformerModelBase):
 def tiny_architecture(args):
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 64)
     args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 64)
-    args.encoder_layers = getattr(args, "encoder_layers", 2)
+    args.encoder_layers = (
+        1
+        if getattr(args, "encoder_recurrent_stacking", 1) > 1
+        else getattr(args, "encoder_layers", 2)
+    )
     args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 2)
-    args.decoder_layers = getattr(args, "decoder_layers", 2)
+    args.decoder_layers = (
+        1
+        if getattr(args, "decoder_recurrent_stacking", 1) > 1
+        else getattr(args, "decoder_layers", 2)
+    )
     args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 2)
     return base_architecture(args)
 
@@ -170,7 +178,11 @@ def base_architecture(args):
     args.encoder_embed_path = getattr(args, "encoder_embed_path", None)
     args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 512)
     args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 2048)
-    args.encoder_layers = getattr(args, "encoder_layers", 6)
+    args.encoder_layers = (
+        1
+        if getattr(args, "encoder_recurrent_stacking", 1) > 1
+        else getattr(args, "encoder_layers", 6)
+    )
     args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 8)
     args.encoder_normalize_before = getattr(args, "encoder_normalize_before", False)
     args.encoder_learned_pos = getattr(args, "encoder_learned_pos", False)
@@ -180,7 +192,11 @@ def base_architecture(args):
     args.decoder_ffn_embed_dim = getattr(
         args, "decoder_ffn_embed_dim", args.encoder_ffn_embed_dim
     )
-    args.decoder_layers = getattr(args, "decoder_layers", 6)
+    args.decoder_layers = (
+        1
+        if getattr(args, "decoder_recurrent_stacking", 1) > 1
+        else getattr(args, "decoder_layers", 6)
+    )
     args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 8)
     args.decoder_normalize_before = getattr(args, "decoder_normalize_before", False)
     args.decoder_learned_pos = getattr(args, "decoder_learned_pos", False)
@@ -275,3 +291,42 @@ def transformer_wmt_en_de_big_t2t(args):
     args.attention_dropout = getattr(args, "attention_dropout", 0.1)
     args.activation_dropout = getattr(args, "activation_dropout", 0.1)
     transformer_vaswani_wmt_en_de_big(args)
+
+
+######################################################### CUSTOM ARCHITECTURES #########################################################
+
+
+@register_model_architecture("transformer", "transformer_base18L")
+def _transformer_base18L(args):
+    args.activation_fn = getattr(args, "activation_fn", "gelu")
+    args.encoder_layers = getattr(args, "encoder_layers", 18)
+    args.decoder_layers = getattr(args, "decoder_layers", 18)
+    args.layernorm_embedding = getattr(args, "layernorm_embedding", True)
+    args.encoder_normalize_before = getattr(args, "encoder_normalize_before", True)
+    args.decoder_normalize_before = getattr(args, "decoder_normalize_before", True)
+    base_architecture(args)
+
+
+@register_model_architecture("transformer", "transformer_IT2_dist")
+def transformer_base18L(args):
+    args.share_decoder_input_output_embed = getattr(
+        args, "share_decoder_input_output_embed", True
+    )
+    _transformer_base18L(args)
+
+
+@register_model_architecture("transformer", "transformer_IT2")
+def transformer_deep(args):
+    args.activation_fn = getattr(args, "activation_fn", "gelu")
+    args.encoder_layers = getattr(args, "encoder_layers", 18)
+    args.decoder_layers = getattr(args, "decoder_layers", 18)
+    args.encoder_embed_dim = getattr(args, "encoder_embed_dim", 1024)
+    args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 1024)
+    args.encoder_ffn_embed_dim = getattr(args, "encoder_ffn_embed_dim", 8192)
+    args.decoder_ffn_embed_dim = getattr(args, "decoder_ffn_embed_dim", 8192)
+    args.encoder_attention_heads = getattr(args, "encoder_attention_heads", 16)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 16)
+    args.layernorm_embedding = getattr(args, "layernorm_embedding", False)
+    args.encoder_normalize_before = getattr(args, "encoder_normalize_before", True)
+    args.decoder_normalize_before = getattr(args, "decoder_normalize_before", True)
+    base_architecture(args)

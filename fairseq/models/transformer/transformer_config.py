@@ -24,11 +24,25 @@ _NAME_PARSER = r"(decoder|encoder|quant_noise)_(.*)"
 
 @dataclass
 class EncDecBaseConfig(FairseqDataclass):
+    recurrent_stacking: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "number of recurrent stackings for the encoder and decoder layers"
+        },
+    )
     embed_path: Optional[str] = field(
         default=None, metadata={"help": "path to pre-trained embedding"}
     )
     embed_dim: Optional[int] = field(
         default=512, metadata={"help": "embedding dimension"}
+    )
+    factorized_embed_dim: Optional[int] = field(
+        default=None,
+        metadata={
+            "help": "hidden dimension for the factorized embeddings."
+            "If this argument is specified, regular embeddings will be skipped and factorized embeddings will be generated"
+            "Nevertheless, embed_dim parameter must be specified"
+        },
     )
     ffn_embed_dim: int = field(
         default=2048, metadata={"help": "embedding dimension for FFN"}
@@ -48,7 +62,6 @@ class EncDecBaseConfig(FairseqDataclass):
     layers_to_keep: Optional[List[int]] = field(
         default=None, metadata={"help": "which layers to *keep* when pruning"}
     )
-
     xformers_att_config: Optional[str] = field(
         default=None,
         metadata={
@@ -65,6 +78,10 @@ class DecoderConfig(EncDecBaseConfig):
         metadata={
             "help": "decoder output dimension (extra linear layer if different from decoder embed dim)"
         },
+    )
+    output_activation_fn: Optional[str] = field(
+        default=None,
+        metadata={"help": "activation for the decoder output layer mentioned above"},
     )
 
     def __post_init__(self):
@@ -95,6 +112,20 @@ class QuantNoiseConfig(FairseqDataclass):
 
 @dataclass
 class TransformerConfig(FairseqDataclass):
+    ### EXPERIMENTAL :: NOT TO BE USED UNTIL TESTED ###
+    adapter_activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
+        default="relu", metadata={"help": "activation function for adapters"}
+    )
+    factorized_embed_activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = (
+        field(
+            default="linear",
+            metadata={
+                "help": "activation function to use for the factorized embedding"
+            },
+        )
+    )
+    ### EXPERIMENTAL :: NOT TO BE USED UNTIL TESTED ###
+
     activation_fn: ChoiceEnum(utils.get_available_activation_fns()) = field(
         default="relu",
         metadata={"help": "activation function to use"},
@@ -111,13 +142,13 @@ class TransformerConfig(FairseqDataclass):
         },
     )
     adaptive_input: bool = False
-    encoder: EncDecBaseConfig = EncDecBaseConfig()
+    encoder: EncDecBaseConfig = field(default=EncDecBaseConfig)
     # TODO should really be in the encoder config
     max_source_positions: int = field(
         default=DEFAULT_MAX_SOURCE_POSITIONS,
         metadata={"help": "Maximum input length supported by the encoder"},
     )
-    decoder: DecoderConfig = DecoderConfig()
+    decoder: DecoderConfig = field(default=DecoderConfig)
     # TODO should really be in the decoder config
     max_target_positions: int = field(
         default=DEFAULT_MAX_TARGET_POSITIONS,
@@ -196,8 +227,38 @@ class TransformerConfig(FairseqDataclass):
     cross_self_attention: bool = field(
         default=False, metadata={"help": "perform cross+self-attention"}
     )
+    use_native_attention: Optional[bool] = field(
+        default=False,
+        metadata={
+            "help": "use native attention implementation without much checks. Mainly added for RoPE and LoRA implementation"
+        },
+    )
+
+    lora_args: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "LoRA arguments (rank, alpha, dropout, target_modules, rank_scaled)"
+        },
+    )
+    rope_args: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "RoPE arguments (max_position_embeddings, base, type ['vanilla', 'linear', 'dynamic'], scale)"
+        },
+    )
+    yarn_args: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "YaRN arguments (max_position_embeddings, base, type ['vanilla', 'dynamic'], scale, original_max_position_embeddings, extrapolation_factor, attn_factor, beta_fast, beta_slow, finetuned)"
+        },
+    )
+    alibi_args: Optional[str] = field(
+        default=None,
+        metadata={"help": "ALiBi arguments (alibi_asymmetrical)"},
+    )
+
     # args for Training with Quantization Noise for Extreme Model Compression ({Fan*, Stock*} et al., 2020)
-    quant_noise: QuantNoiseConfig = field(default=QuantNoiseConfig())
+    quant_noise: QuantNoiseConfig = field(default=QuantNoiseConfig)
     min_params_to_wrap: int = field(
         default=DEFAULT_MIN_PARAMS_TO_WRAP,
         metadata={
@@ -329,9 +390,7 @@ class TransformerConfig(FairseqDataclass):
             args_dict = (
                 args._asdict()
                 if safe_hasattr(args, "_asdict")
-                else vars(args)
-                if safe_hasattr(args, "__dict__")
-                else {}
+                else vars(args) if safe_hasattr(args, "__dict__") else {}
             )  # namedtupled doesn't have __dict__ :-/
             for key, value in args_dict.items():
                 if key not in seen:

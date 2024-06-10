@@ -71,7 +71,6 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
-
         Returns a tuple with three elements:
         1) the loss
         2) the sample size, which is used as the denominator for the gradient
@@ -95,8 +94,8 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
             logging_output["total"] = utils.item(total.data)
         return loss, sample_size, logging_output
 
-    def get_lprobs_and_target(self, model, net_output, sample):
-        lprobs = model.get_normalized_probs(net_output, log_probs=True)
+    def get_lprobs_and_target(self, model, net_output, sample, log_probs=True):
+        lprobs = model.get_normalized_probs(net_output, log_probs=log_probs)
         target = model.get_targets(sample, net_output)
         if self.ignore_prefix_size > 0:
             # lprobs: B x T x C
@@ -151,11 +150,11 @@ class LabelSmoothedCrossEntropyCriterion(FairseqCriterion):
             metrics.log_scalar("n_correct", n_correct)
             metrics.log_derived(
                 "accuracy",
-                lambda meters: round(
-                    meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
-                )
-                if meters["total"].sum > 0
-                else float("nan"),
+                lambda meters: (
+                    round(meters["n_correct"].sum * 100.0 / meters["total"].sum, 3)
+                    if meters["total"].sum > 0
+                    else float("nan")
+                ),
             )
 
     @staticmethod

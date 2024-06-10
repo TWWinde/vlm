@@ -15,6 +15,7 @@ from .downsampled_multihead_attention import DownsampledMultiHeadAttention
 from .dynamic_convolution import DynamicConv, DynamicConv1dTBC, DynamicConv_scripatable
 from .dynamic_crf_layer import DynamicCRF
 from .ema_module import EMAModuleConfig, EMAModule
+from .factorized_embedding import FactorizedEmbedding
 from .fairseq_dropout import FairseqDropout
 from .fp32_batch_norm import Fp32BatchNorm
 from .fp32_group_norm import Fp32GroupNorm
@@ -31,6 +32,7 @@ from .linearized_convolution import LinearizedConvolution
 from .location_attention import LocationAttention
 from .lstm_cell_with_zoneout import LSTMCellWithZoneOut
 from .multihead_attention import MultiheadAttention
+from .native_multihead_attention import NativeMultiheadAttention
 from .positional_embedding import PositionalEmbedding
 from .same_pad import SamePad, SamePad2d
 from .scalar_bias import ScalarBias
@@ -46,10 +48,18 @@ from .espnet_multihead_attention import (
     RelPositionMultiHeadedAttention,
     RotaryPositionMultiHeadedAttention,
 )
-from .rotary_positional_embedding import RotaryPositionalEmbedding
+from .rotary_positional_embedding import (
+    RotaryPositionalEmbedding,
+    LinearScalingRotaryPositionalEmbedding,
+    DynamicNTKScalingRotaryPositionalEmbedding,
+    YaRNScaledRotaryPositionalEmbedding,
+    YaRNScaledRotaryPositionalEmbedding,
+    DynamicYaRNScaledRotaryPositionalEmbedding,
+)
 from .positional_encoding import (
     RelPositionalEncoding,
 )
+
 
 __all__ = [
     "AdaptiveInput",
@@ -66,6 +76,7 @@ __all__ = [
     "DynamicCRF",
     "EMAModule",
     "EMAModuleConfig",
+    "FactorizedEmbedding",
     "FairseqDropout",
     "Fp32BatchNorm",
     "Fp32GroupNorm",
@@ -85,6 +96,7 @@ __all__ = [
     "LocationAttention",
     "LSTMCellWithZoneOut",
     "MultiheadAttention",
+    "NativeMultiheadAttention",
     "PositionalEmbedding",
     "SamePad",
     "SamePad2d",
@@ -103,4 +115,9 @@ __all__ = [
     "RelPositionalEncoding",
     "RotaryPositionalEmbedding",
     "RotaryPositionMultiHeadedAttention",
+    "LinearScalingRotaryPositionalEmbedding",
+    "DynamicNTKScalingRotaryPositionalEmbedding",
+    "YaRNScaledRotaryPositionalEmbedding",
+    "DynamicYaRNScaledRotaryPositionalEmbedding",
+    "DynamicYaRNScaledRotaryPositionalEmbedding",
 ]
